@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#111c30">
+<title>ReleaseDesk · Deployment Document Generator</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="shell">
+  <aside class="sidebar">
+    <div class="brand"><img class="brand-logo" src="assets/cardzone-logo.png" alt="Cardzone logo"><strong class="brand-app-name">ReleaseDesk</strong></div>
+    <div class="side-label">WORKSPACE</div>
+    <button class="nav active" data-view="start"><span class="nav-icon">▣</span> Document selection</button>
+    <button class="nav" data-view="details"><span class="nav-icon">▤</span> Deployment details</button>
+    <button class="nav" data-view="applications"><span class="nav-icon">▦</span> Applications & files</button>
+    <button class="nav" data-view="review"><span class="nav-icon">✓</span> Review & generate</button>
+    <div class="side-label second">ADMINISTRATION</div>
+    <button class="nav" data-view="config"><span class="nav-icon">⚙</span> Bank configuration</button>
+    <div class="side-spacer"></div>
+
+    <div class="side-footer">ReleaseDesk v1.8</div>
+  </aside>
+  <main class="main">
+    <header class="topbar">
+      <div class="crumb">Deployment workspace <span> / </span> <strong id="crumbLabel">Deployment details</strong></div>
+      <div class="right-controls"><button id="backupBtn" class="button ghost sm" title="Export both configuration and deployment draft">Export data</button></div>
+    </header>
+    <div class="content">
+      <div class="page-head"><div><div class="eyebrow" id="eyebrow">NEW RELEASE</div><h1 id="pageTitle">Deployment details</h1><p class="lead" id="pageLead">Enter the release information once. It will populate all three documents.</p></div><div class="header-actions"><button class="button ghost" id="importBtn">Import data</button><button class="button ghost" id="resetBtn">New deployment</button></div></div>
+      <div id="alertHost" aria-live="polite"></div>
+      <section id="view-start">
+        <div class="panel welcome-panel">
+          <div class="section-head"><div class="section-index">01</div><div><h2>Select documents to generate</h2><p>Choose one or more documents for this deployment. You can change your selection later.</p></div></div>
+          <div class="document-choices">
+            <label class="document-choice"><input type="checkbox" data-document-choice="itcr"><span class="file-symbol word">W</span><span><strong>IT Change Request</strong><small>ITCR · Word document</small></span></label>
+            <label class="document-choice"><input type="checkbox" data-document-choice="checklist"><span class="file-symbol excel">X</span><span><strong>Deployment Checklist</strong><small>Deployment and fallback · Excel workbook</small></span></label>
+            <label class="document-choice"><input type="checkbox" data-document-choice="release"><span class="file-symbol word">W</span><span><strong>Software Release Note</strong><small>Release information and procedures · Word document</small></span></label>
+          </div>
+          <div class="selection-summary" id="selectionSummary"></div>
+          <div class="page-next"><button class="button primary" id="startNextBtn">Continue to deployment details →</button></div>
+        </div>
+      </section>
+      <section id="view-details">
+        <div class="grid two">
+          <div class="panel"><div class="section-head"><div class="section-index">01</div><div><h2>Release information</h2><p>Ticket references and requestor details</p></div></div>
+            <div class="field-grid">
+              <label class="field"><span>Bank</span><select id="bankSelect" data-draft="bankId"></select></label>
+              <label class="field"><span>Environment</span><select data-draft="env"><option>PROD</option><option>UAT</option><option>PREPROD</option><option>DR</option></select></label>
+              <label class="field"><span>CTC ticket number</span><input data-draft="ctc" placeholder="e.g. 142990"></label>
+              <label class="field"><span>Ticket title <em>Required for ITCR description</em></span><input data-draft="ticketTitle" placeholder="e.g. CTF File Processing Error"></label>
+              <label class="field"><span>Mantis ticket number</span><input data-draft="mantis" placeholder="e.g. 0002964"></label>
+              
+              <label class="field"><span>IT CR #</span><input data-draft="itcr" placeholder="Leave blank if not assigned"></label>
+              <label class="field"><span>PCR / CR / SR / IR #</span><input data-draft="pcrNumber" placeholder="Optional change reference"></label>
+              <label class="field"><span>System / Hardware Affected</span><input data-draft="systemAffected" placeholder="e.g. CMS application servers"></label>
+              <label class="field"><span>Module</span><input data-draft="moduleAffected" placeholder="e.g. Batch / Switch"></label>
+              <label class="field"><span>Date requested</span><input type="date" data-draft="requestDate"></label>
+              <label class="field"><span>Requestor</span><input data-draft="requestor" placeholder="Name of requester"></label>
+              <label class="field"><span>Contact number</span><input data-draft="contact" placeholder="Contact number"></label>
+              <label class="field"><span>Department / section</span><input data-draft="department" placeholder="Cardzone"></label>
+              <label class="field"><span>PIC (person in charge)</span><input data-draft="pic" placeholder="e.g. Naim / Support Team"></label>
+              <fieldset class="affect-group change-type-group"><legend>Change Type <em>(select multiple)</em></legend>
+                <label class="check-option"><input type="checkbox" data-change-type value="Add / New"> Add / New</label>
+                <label class="check-option"><input type="checkbox" data-change-type value="Modify"> Modify</label>
+                <label class="check-option"><input type="checkbox" data-change-type value="Delete"> Delete</label>
+              </fieldset>
+              <label class="field"><span>Change category</span><select data-draft="impactLevel"><option>Minor</option><option>Major</option><option>Expedited</option><option>Emergency</option></select></label>
+              <label class="field"><span>SIT & UAT completed?</span><select data-draft="uat"><option value="Yes">Yes</option><option value="No">No</option><option value="Pending">Pending</option></select></label>
+            </div>
+          </div>
+          <div class="stack">
+            <div class="panel"><div class="section-head"><div class="section-index">02</div><div><h2>Activity schedule</h2><p>Supports deployments spanning multiple days</p></div></div>
+              <div class="field-grid"><label class="field"><span>Start date</span><input type="date" data-draft="startDate"></label><label class="field"><span>Start time</span><input type="time" data-draft="startTime"></label><label class="field"><span>End date</span><input type="date" data-draft="endDate"></label><label class="field"><span>End time</span><input type="time" data-draft="endTime"></label></div>
+              <div class="duration"><div><small>PLANNED ACTIVITY DURATION</small><strong id="durationView">—</strong></div><span class="duration-icon">◷</span></div>
+            </div>
+            <div class="panel"><div class="section-head"><div class="section-index">03</div><div><h2>Service impact</h2><p>Change category and downtime justification</p></div></div>
+              <label class="field"><span>Reason for activity</span><select data-draft="reason"><option value="Bugfix / Solution to Problem">Solution to problem / Bugfix</option><option value="Enhancement / Upgrade">Enhancement / Upgrade</option><option value="Infrastructure Change">Infrastructure change</option><option value="Other">Others</option></select></label>
+              <label class="field"><span>Code change?</span><select data-draft="codeChange"><option value="Yes">Yes</option><option value="No">No</option></select></label>
+              <label class="field"><span>Downtime required?</span><select data-draft="downtime"><option value="No">No</option><option value="Yes">Yes</option></select></label>
+              <div id="downtimeReasonWrap">
+                <label class="field"><span>Expected downtime (hours) <em>Required if Yes — e.g. 1.5 for 1 hour 30 minutes</em></span><input type="number" min="0.01" step="0.25" inputmode="decimal" data-draft="downtimeHours" placeholder="e.g. 1.5"></label>
+                <label class="field"><span>Reason downtime is required <em>Required if Yes</em></span><textarea rows="3" data-draft="downtimeReason" placeholder="Explain why service interruption is necessary..."></textarea></label>
+              </div>
+              <label class="field"><span>Expected impact / affected services</span><textarea rows="2" data-draft="impactText" placeholder="e.g. No expected interruption while nodes are deployed sequentially"></textarea></label>
+            </div>
+          </div>
+        </div>
+        <div class="panel" id="deploymentObjectOptions"><div class="section-head"><div class="section-index">04</div><div><h2>SQL & XML deployment options</h2><p>Optional additional files. SQL scripts execute before JAR/WAR/XML deployment.</p></div></div>
+          <div class="field-grid"><label class="field"><span>SQL file involved?</span><select data-draft="sqlInvolved"><option>No</option><option>Yes</option></select></label>
+          <label class="field"><span>XML file involved?</span><select data-draft="xmlInvolved"><option>No</option><option>Yes</option></select></label></div>
+          <div id="xmlHelp" class="info-line hide">XML filenames and New / Existing status are entered under <b>Applications &amp; files</b> after choosing an affected application.</div>
+          <div id="sqlDetailsWrap" class="sql-details hide">
+
+            <div class="cfg-title">SQL FILES AND REQUIRED FALLBACK SCRIPTS</div><p class="meta">Both filenames are optional. If blank, ReleaseDesk uses the CTC ticket and Mantis ticket number to generate the filename automatically.</p><div id="sqlFileRows"></div><button class="tiny-action" id="addSqlBtn">+ Add SQL script &amp; fallback</button>
+            <div class="info-line">Fixed procedure: <b>Pre-deployment</b> — back up current data and prepare fallback script; <b>Deployment</b> — execute the named SQL scripts before other components; <b>Fallback</b> — execute the named fallback scripts. The app never runs SQL or contacts a database.</div>
+          </div>
+        </div>
+        <div class="panel affected-panel"><div class="section-head"><div class="section-index">05</div><div><h2>ITCR affected areas</h2><p>Select every applicable option. The generated ITCR will mark each selected box with an X.</p></div></div>
+          <div class="affected-grid">
+            <fieldset class="affect-group"><legend>Parties Affected</legend>
+              <label class="check-option"><input type="checkbox" data-affected-group="partiesAffected" value="Application/BRM"> Application/BRM</label>
+              <label class="check-option"><input type="checkbox" data-affected-group="partiesAffected" value="Infra"> Infra</label>
+              <label class="check-option"><input type="checkbox" data-affected-group="partiesAffected" value="Security"> Security</label>
+              <label class="check-option"><input type="checkbox" data-affected-group="partiesAffected" value="Vendor (SL / DXC)"> Vendor (SL / DXC)</label>
+              <label class="check-option"><input type="checkbox" data-affected-group="partiesAffected" value="Others"> Others</label>
+              <input data-draft="partiesOther" placeholder="Specify other party" aria-label="Other parties affected">
+            </fieldset>
+            <fieldset class="affect-group"><legend>Component Affected</legend>
+              <label class="check-option"><input type="checkbox" data-affected-group="componentAffected" value="Application"> Application</label>
+              <label class="check-option"><input type="checkbox" data-affected-group="componentAffected" value="Hardware/Network"> Hardware/Network</label>
+              <label class="check-option"><input type="checkbox" data-affected-group="componentAffected" value="Procedural / Rules"> Procedural / Rules</label>
+              <label class="check-option"><input type="checkbox" data-affected-group="componentAffected" value="Database"> Database</label>
+              <label class="check-option"><input type="checkbox" data-affected-group="componentAffected" value="Others"> Others</label>
+              <input data-draft="componentOther" placeholder="Specify other component" aria-label="Other component affected">
+            </fieldset>
+            <fieldset class="affect-group"><legend>Programs Affected</legend>
+              <label class="check-option"><input type="checkbox" data-affected-group="programsAffected" value="Programs/Database"> Programs/Database</label>
+              <label class="check-option"><input type="checkbox" data-affected-group="programsAffected" value="Parameter *"> Parameter *</label>
+              <label class="check-option"><input type="checkbox" data-affected-group="programsAffected" value="Data Patching**"> Data Patching**</label>
+              <label class="check-option"><input type="checkbox" data-affected-group="programsAffected" value="Rules / Configuration"> Rules / Configuration</label>
+              <label class="check-option"><input type="checkbox" data-affected-group="programsAffected" value="Others"> Others</label>
+              <input data-draft="programsOther" placeholder="Specify other program" aria-label="Other programs affected">
+            </fieldset>
+          </div>
+        </div>
+        <div class="panel narrative"><div class="section-head"><div class="section-index">06</div><div><h2>Change description &amp; justification</h2><p>ITCR Description: CTC ticket - Ticket title. ITCR Justification: the four fields below.</p></div></div>
+          <div class="rich-group"><div class="rich-title">Background / Issue</div><div class="toolbar"><button data-rich="bold" data-target="background">B</button><button data-rich="italic" data-target="background"><i>I</i></button><button data-rich="insertUnorderedList" data-target="background">• List</button></div><div id="background" class="rich-editor" contenteditable="true" data-rich-field="background" data-placeholder="Explain the issue, request or background..."></div></div>
+          <div class="rich-group"><div class="rich-title">Root cause</div><div class="toolbar"><button data-rich="bold" data-target="rootCause">B</button><button data-rich="italic" data-target="rootCause"><i>I</i></button><button data-rich="insertUnorderedList" data-target="rootCause">• List</button></div><div id="rootCause" class="rich-editor" contenteditable="true" data-rich-field="rootCause" data-placeholder="Describe the root cause..."></div></div>
+          <div class="rich-group"><div class="rich-title">Solution</div><div class="toolbar"><button data-rich="bold" data-target="solution">B</button><button data-rich="italic" data-target="solution"><i>I</i></button><button data-rich="insertUnorderedList" data-target="solution">• List</button></div><div id="solution" class="rich-editor" contenteditable="true" data-rich-field="solution" data-placeholder="Describe the solution and the intended outcome..."></div></div>
+          <div class="rich-group"><div class="rich-title">Impact Analysis <em>For ITCR Justification</em></div><div class="toolbar"><button data-rich="bold" data-target="impactAnalysis">B</button><button data-rich="italic" data-target="impactAnalysis"><i>I</i></button><button data-rich="insertUnorderedList" data-target="impactAnalysis">• List</button></div><div id="impactAnalysis" class="rich-editor" contenteditable="true" data-rich-field="impactAnalysis" data-placeholder="Describe expected impact, scope, risk and affected functions..."></div></div>
+          <label class="field"><span>Overall verification / post-deployment validation</span><textarea data-draft="validation" rows="3" placeholder="e.g. Verify both nodes, check service health and perform application smoke tests"></textarea></label>
+          <label class="field"><span>Additional notes</span><textarea data-draft="notes" rows="2" placeholder="Optional notes or dependencies"></textarea></label>
+        </div>
+
+        <div class="panel signature-panel" id="signaturePanel">
+          <div class="section-head"><div class="section-index">07</div><div><h2>Signature preferences</h2><p>Applies only to your requestor/preparer fields. Reviewer and bank approval signatures remain blank.</p></div></div>
+          <div class="signature-cards">
+            <div class="signature-card" data-signature-role="itcr"><h3>ITCR requestor signature</h3>
+              <label class="field"><span>Signature option</span><select data-signature-field="mode" data-signature-role="itcr"><option value="blank">Leave blank</option><option value="typed">Typed signature</option><option value="image">Upload signature image</option></select></label>
+              <div class="signature-typed hide" data-signature-section="typed" data-signature-role="itcr">
+                <label class="field"><span>Signature text <em>Blank uses requestor name</em></span><input data-signature-field="text" data-signature-role="itcr" placeholder="Requestor name"></label>
+                <div class="field-grid"><label class="field"><span>Font type</span><select data-signature-field="font" data-signature-role="itcr"><option>Segoe Script</option><option>Georgia</option><option>Times New Roman</option><option>Arial</option><option>Calibri</option></select></label>
+                <label class="field"><span>Font style</span><select data-signature-field="style" data-signature-role="itcr"><option value="italic">Italic</option><option value="boldItalic">Bold italic</option></select></label></div>
+              </div>
+              <div class="signature-upload hide" data-signature-section="image" data-signature-role="itcr">
+                <label class="field"><span>Upload image (PNG, JPG or WebP)</span><input type="file" accept="image/png,image/jpeg,image/webp" data-signature-upload="itcr"></label>
+                <div class="signature-preview" data-signature-preview="itcr">No image selected</div><button type="button" class="tiny-action" data-clear-signature="itcr">Clear image</button>
+              </div>
+            </div>
+            <div class="signature-card" data-signature-role="release"><h3>Release Note prepared-by signature</h3>
+              <label class="field"><span>Signature option</span><select data-signature-field="mode" data-signature-role="release"><option value="blank">Leave blank</option><option value="typed">Typed signature</option><option value="image">Upload signature image</option></select></label>
+              <div class="signature-typed hide" data-signature-section="typed" data-signature-role="release">
+                <label class="field"><span>Signature text <em>Blank uses PIC name</em></span><input data-signature-field="text" data-signature-role="release" placeholder="Prepared-by name"></label>
+                <div class="field-grid"><label class="field"><span>Font type</span><select data-signature-field="font" data-signature-role="release"><option>Segoe Script</option><option>Georgia</option><option>Times New Roman</option><option>Arial</option><option>Calibri</option></select></label>
+                <label class="field"><span>Font style</span><select data-signature-field="style" data-signature-role="release"><option value="italic">Italic</option><option value="boldItalic">Bold italic</option></select></label></div>
+              </div>
+              <div class="signature-upload hide" data-signature-section="image" data-signature-role="release">
+                <label class="field"><span>Upload image (PNG, JPG or WebP)</span><input type="file" accept="image/png,image/jpeg,image/webp" data-signature-upload="release"></label>
+                <div class="signature-preview" data-signature-preview="release">No image selected</div><button type="button" class="tiny-action" data-clear-signature="release">Clear image</button>
+              </div>
+            </div>
+          </div>
+          <p class="meta">Uploaded signature images are used for the current browser session and are not included in configuration backups. Review signatures before sharing documents.</p>
+        </div>
+        <div class="page-next"><button class="button primary" data-go="applications">Continue to applications <span>→</span></button></div>
+      </section>
+      <section id="view-applications" hidden><div class="panel"><div class="section-head"><div class="section-index">02</div><div><h2>Select applications</h2><p>Multiple applications can be included in the same deployment. Each application may have multiple server nodes.</p></div></div><div id="applicationCards" class="app-cards"></div></div><div class="info-line">ⓘ SQL runs first. Existing XML is backed up before replacement; new XML has no pre-deployment backup. JAR/WAR nodes are deployed sequentially.</div><div class="page-next"><button class="button ghost" data-go="details">← Back</button><button class="button primary" data-go="review">Review deployment →</button></div></section>
+      <section id="view-review" hidden>
+        <div id="reviewWarnings"></div>
+        <div class="metrics" id="metrics"></div>
+        <div class="panel"><div class="section-head"><div class="section-index">✓</div><div><h2>Document package</h2><p>Editable Office documents prepared for your release</p></div></div>
+          <div class="downloads"><div class="download-card" data-document-download="itcr"><span class="file-symbol word">W</span><div><strong>IT Change Request</strong><small>ITCR · .docx</small></div><button class="button outline" id="downloadITCR">Download</button></div><div class="download-card" data-document-download="checklist"><span class="file-symbol excel">X</span><div><strong>Deployment Plan & Checklist</strong><small>Deployment + fallback · .xlsx</small></div><button class="button outline" id="downloadChecklist">Download</button></div><div class="download-card" data-document-download="release"><span class="file-symbol word">W</span><div><strong>Software Release Note</strong><small>Release details and procedures · .docx</small></div><button class="button outline" id="downloadRelease">Download</button></div></div>
+          <div class="download-footer"><button class="button primary" id="downloadAll">Download selected documents</button><span>Review the generated content and obtain the required approvals.</span></div>
+        </div>
+        <div class="panel"><div class="section-head"><div class="section-index">→</div><div><h2>Generated deployment sequence</h2><p>Preview the instructions before using them in a change window.</p></div></div><div class="tabs" id="planTabs"><button class="tab active" data-tab="pre">Pre-deployment</button><button class="tab" data-tab="deploy">Deployment</button><button class="tab" data-tab="post">Post-deployment</button><button class="tab" data-tab="rollback">Rollback</button></div><div id="planPreview"></div></div>
+        <div class="page-next"><button class="button ghost" data-go="applications">← Change applications</button><button class="button outline" id="exportDraftBtn">Export deployment JSON</button></div>
+      </section>
+      <section id="view-config" hidden><div class="panel"><div class="section-head"><div class="section-index">⚙</div><div><h2>Bank & application configuration</h2><p>Saved on this browser. Edit server details, paths and commands before a deployment.</p></div></div><div class="config-top"><label class="field"><span>Bank to configure</span><select id="settingsBank"></select></label><button class="button outline" id="addBankBtn">+ Add bank</button><button class="button outline" id="addAppBtn">+ Add application</button></div><div id="bankConfigHeading"></div><div id="configAppList"></div><div class="config-foot">Changes are saved immediately in this browser. Use <strong>Export data</strong> to back up your configuration and import it on another laptop.</div></div><div class="page-next"><button class="button primary" data-go="details">← Back to deployment</button></div></section>
+      <footer class="footer">ReleaseDesk v1.8 · Template-based deployment documents <span>Review all generated commands and obtain required approvals before executing any change.</span></footer>
+    </div>
+  </main>
+</div>
+<input type="file" id="fileImport" accept=".json,application/json" hidden>
+<script src="vendor/jszip.min.js"></script>
+<script src="assets/templates-data.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
