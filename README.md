@@ -1,4 +1,4 @@
-# ReleaseDesk v1.8 — Deployment Document Generator
+# ReleaseDesk v1.9 — Deployment Document Generator
 
 ReleaseDesk generates IT Change Requests, Deployment Checklists and Software Release Notes from configurable bank/application information and document templates.
 
@@ -38,3 +38,11 @@ Use **Export data** and **Import data**. Earlier v1.x backup files can be import
 ## Contents
 
 `index.html`, `style.css`, `app.js`, `assets/`, `vendor/`, and `templates/`. Keep the files together. JSZip is included with its license. The Cardzone logo displayed in the app was sourced from the user-supplied BONUM release-note reference.
+
+## Release note procedure pattern (v1.9)
+
+- Backup and rollback procedures use paired, numbered groups per component and node. JAR/WAR files use `mv filename backup/filename.YYYYMMDD`; existing XML files use `mv filename filename.YYYYMMDD` in the configured XML directory.
+- Rollback removes the newly deployed file and restores the date-stamped backup. New XML has a removal-only fallback that requires authorization.
+- Binary file movement occurs after stopping the node. SQL is executed before application deployment.
+- Deployment instructions are grouped by node, with XML subgroups and verification before moving to the next node.
+- Review generated commands, paths, filenames, permissions, downtime, and rollback approvals before executing.
