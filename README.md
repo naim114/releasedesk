@@ -1,4 +1,4 @@
-# ReleaseDesk v2.0 — Deployment Document Generator
+# ReleaseDesk v1.9 — Deployment Document Generator
 
 ReleaseDesk generates IT Change Requests, Deployment Checklists and Software Release Notes from configurable bank/application information and document templates.
 
@@ -46,12 +46,3 @@ Use **Export data** and **Import data**. Earlier v1.x backup files can be import
 - Binary file movement occurs after stopping the node. SQL is executed before application deployment.
 - Deployment instructions are grouped by node, with XML subgroups and verification before moving to the next node.
 - Review generated commands, paths, filenames, permissions, downtime, and rollback approvals before executing.
-
-## Reusable notes for each application (v2.0)
-
-Each bank application (Switch, Batch, Webservice, ACS/3DS, 3DSS, etc.) has an editable **Application Notes** field in **Bank configuration**. Notes may include operational reminders, dependencies, validation considerations and deployment precautions.
-
-- These notes appear under each application on the **Applications & files** screen when filled in.
-- Notes are stored per bank and application in the browser alongside other configuration and included in full JSON **Export data** backups.
-- Application notes are not automatically inserted into ITCR, Deployment Checklist or Release Note documents.
-- Avoid putting credentials, passwords, API keys, or other secrets in notes. GitHub-hosted static builds store browser configuration on the user's own browser, not in GitHub.
