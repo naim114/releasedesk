@@ -1,4 +1,4 @@
-/* ReleaseDesk v1.8. Document drafting only; no deployment execution. */
+/* ReleaseDesk v1.9. Document drafting only; no deployment execution. */
 (() => {
 'use strict';
 const STORAGE='releasedesk-v1-state', WORD_NS='http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -170,90 +170,82 @@ function renderApplications(){
 }
 function renderConfig(){const b=state.banks.find(x=>x.id===(state.settingsBankId||state.draft.bankId))||bank();$('#settingsBank').value=b.id;$('#bankConfigHeading').innerHTML=`<div class="config-bank-name"><strong>${escapeHtml(b.code)}</strong> — ${escapeHtml(b.name)} <span class="cfg-small">· ${b.apps.length} applications</span></div><div class="field-grid" style="margin-bottom:12px"><label class="field"><span>Bank code</span><input data-bank-field="code" data-bid="${b.id}" value="${escapeHtml(b.code)}"></label><label class="field"><span>Bank name</span><input data-bank-field="name" data-bid="${b.id}" value="${escapeHtml(b.name)}"></label></div>`;
 $('#configAppList').innerHTML=b.apps.map(a=>`<details class="cfg-app"><summary><span>${escapeHtml(a.name)} <small class="cfg-small">— ${a.nodes.length} node(s)</small></span><span class="cfg-small">${a.type.toUpperCase()} · ${escapeHtml(a.filename||'Not set')}</span></summary><div class="cfg-body"><div class="field-grid"><label class="field"><span>Application name</span><input data-app-field="name" data-app="${a.id}" value="${escapeHtml(a.name)}"></label><label class="field"><span>Deployment object type</span><select data-app-field="type" data-app="${a.id}"><option value="jar" ${a.type==='jar'?'selected':''}>JAR</option><option value="war" ${a.type==='war'?'selected':''}>WAR</option></select></label><label class="field"><span>Default file name</span><input data-app-field="filename" data-app="${a.id}" value="${escapeHtml(a.filename)}" placeholder="onecard.jar"></label><label class="field"><span>Process-check command</span><input data-app-field="process" data-app="${a.id}" value="${escapeHtml(a.process)}" placeholder="ps -ef | grep -F ..."></label><label class="field"><span>Stop command</span><input data-app-field="stop" data-app="${a.id}" value="${escapeHtml(a.stop)}" placeholder="bin/stopSwitch"></label><label class="field"><span>Start command</span><input data-app-field="start" data-app="${a.id}" value="${escapeHtml(a.start)}" placeholder="bin/startSwitch"></label></div><div class="cfg-title">SERVER NODES</div>${a.nodes.map((n,i)=>`<div class="cfg-node"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px"><strong>Node ${i+1} · ${escapeHtml(n.host||'New node')}</strong><button class="mini-danger" data-remove-node="${a.id}" data-node-index="${i}">Remove node</button></div><div class="field-grid">${[['host','Server name'],['ip','IP address'],['appPath','Application path'],['filePath','JAR/WAR deployment path'],['jasperPath','JasperReport path (future use)'],['xmlPath','XML deployment path']].map(([key,label])=>`<label class="field"><span>${label}</span><input data-node-field="${key}" data-app="${a.id}" data-node="${i}" value="${escapeHtml(n[key]||'')}"></label>`).join('')}</div></div>`).join('')}<div class="cfg-actions"><button class="tiny-action" data-add-node="${a.id}">+ Add server node</button><button class="mini-danger" data-delete-app="${a.id}">Delete application</button></div></div></details>`).join('')||'<div class="notice">No applications added yet.</div>'}
+function validFileName(name){return /^[A-Za-z0-9][A-Za-z0-9._+-]*\.(?:jar|war|xml)$/i.test(String(name||'')) && !String(name).includes('..')}
+function validFolder(path){return /^\/[A-Za-z0-9._/-]+$/.test(String(path||'')) && !String(path).includes('..')}
+function docFolder(path){return validFolder(path)?String(path):'[REVIEW: set valid destination path]'}
+function docFile(name){return validFileName(name)?String(name):'[REVIEW: enter valid filename]'}
+function typedFileCommands(files,fn){return files.map(o=>validFileName(o.name)?fn(o.name):'# REVIEW: file name is missing or invalid; do not proceed.').join('\n')}
+function xmlGroups(a,n,xmls){
+ const groups=new Map();
+ for(const o of xmls){
+  const folder=String(o.path||'').trim()||n.xmlPath;
+  const key=folder||'';
+  if(!groups.has(key))groups.set(key,[]);
+  groups.get(key).push(o);
+ }
+ return [...groups].map(([path,files])=>{
+  const master=/\/cfg\/packager\/?$/.test(path);
+  const label=master?(a.name.toLowerCase()==='lb'?'LB':`Master_${a.name.replace(/[^A-Za-z0-9]/g,'_')}`):'xml';
+  return {path,label,files,existing:files.filter(x=>x.change==='existing'),newFiles:files.filter(x=>x.change==='new')};
+ });
+}
 function buildPlan(){
  const d=state.draft,pre=[],deploy=[],post=[],rollback=[],objects=[],date=stamp();
  const add=(target,a,n,i,title,commands='',note='')=>target.push({app:a.name,node:`Node ${i+1}`,host:n.host||'',ip:n.ip||'',title,commands,note,stage:target===pre?'Pre':target===deploy?'Deployment':target===post?'Post':'Rollback'});
  const addSql=(target,title,commands,note='')=>target.push({app:'SQL/Database',node:'Database',host:'',ip:'',title,commands,note,stage:target===pre?'Pre':target===deploy?'Deployment':'Rollback'});
  if(d.sqlInvolved==='Yes'){
-  addSql(pre,'Back up current data in database',
-   '# Select/retrieve the current affected data before executing any update.\n# Preserve and verify the data backup for use during fallback.',
-   'Confirm that the existing data has been backed up and is recoverable.');
-  addSql(pre,'Prepare fallback SQL script(s)',
-   (effectiveSqlFiles()).map(f=>`# Fallback for ${f.name}: ${f.fallbackName}`).join('\n'),
-   'Confirm that the fallback scripts are ready before starting the deployment.');
-  (effectiveSqlFiles()).forEach(f=>objects.push({application:'SQL/Database',name:f.name,type:'sql',version:'',checksum:''}));
-  (effectiveSqlFiles()).forEach((f,i)=>addSql(deploy,`Execute SQL: ${f.name}`,
-   `# Run approved SQL script: ${f.name}\n# Verify SQL execution completed successfully.`,
-   'Execute and verify SQL before deploying ANY other component. Stop if SQL fails.'));
+  addSql(pre,'Back up current data in database','# Select/retrieve the affected records and save a recoverable copy.\n# Verify the data backup before running any update.');
+  addSql(pre,'Prepare fallback SQL script(s)',effectiveSqlFiles().map(f=>`# Prepared fallback: ${f.fallbackName}`).join('\n'));
+  effectiveSqlFiles().forEach(f=>objects.push({application:'SQL/Database',name:f.name,type:'sql',version:'',checksum:''}));
+  effectiveSqlFiles().forEach(f=>addSql(deploy,`Execute SQL: ${f.name}`,`# Run approved SQL script: ${f.name}\n# Confirm successful execution BEFORE any other component is deployed.`, 'Stop deployment if SQL execution fails.'));
  }
  selected().forEach(a=>{
   const files=binaryArtifacts(a),xmls=xmlArtifacts(a);
   files.forEach(o=>objects.push({application:a.name,name:o.name,type:o.type||a.type,version:o.version||'',checksum:o.checksum||''}));
   xmls.forEach(o=>objects.push({application:a.name,name:o.name||'',type:'xml',version:'',checksum:''}));
   a.nodes.forEach((n,i)=>{
-   const label=`${a.name} — Node ${i+1} (${n.host||'Host not set'} / ${n.ip||'IP not set'})`;
-   const folder=n.filePath||'<JAR/WAR deployment path>',xmlPath=n.xmlPath&&n.xmlPath!=='-'?n.xmlPath:'<CONFIGURE XML PATH>';
-   if(files.length)add(pre,a,n,i,`Back up existing ${files.map(x=>x.name||'file').join(', ')} — ${label}`,
-    `cd ${shellQuote(folder)}\n# Confirm backup/ exists and has enough free space\n${files.map(o=>`cp -p -- ${shellQuote(o.name||'<release file>')} ${shellQuote(`backup/${o.name||'<file>'}.${date}`)}`).join('\n')}`,
-    'Back up each JAR/WAR on each node before deployment.');
-   const existing=xmls.filter(o=>o.change==='existing');
-   for(const o of existing){
-    const destination=String(o.path||'').trim()||xmlPath;
-    add(pre,a,n,i,`Back up existing XML ${o.name||'[XML file]'} — ${label}`,
-     `cd ${shellQuote(destination)}\n# Confirm backup/ exists\ncp -p -- ${shellQuote(o.name||'<XML filename>')} ${shellQuote(`backup/${o.name||'<XML filename>'}.${date}`)}`,
-     'New XML files do NOT require a pre-deployment backup.');
-   }
-  });
-  a.nodes.forEach((n,i)=>{
    if(!files.length&&!xmls.length)return;
-   const where=n.appPath||'<application root>',folder=n.filePath||'<JAR/WAR deployment path>',xmlPath=n.xmlPath&&n.xmlPath!=='-'?n.xmlPath:'<CONFIGURE XML PATH>';
+   const where=n.appPath||'',folder=n.filePath||'',groups=xmlGroups(a,n,xmls);
+   const label=`${a.name} — Node ${i+1} (${n.host||'Host not set'})`;
+   if(files.length){
+    add(pre,a,n,i,`Check backup destination and release files — ${label}`,`# Check ${docFolder(folder)} and the backup directory.\n# Confirm approved release files and available disk space.`, 'Do not move a live JAR/WAR until the application is stopped.');
+   }
+   if(groups.some(g=>g.existing.length)){
+    add(pre,a,n,i,`Confirm existing XML files and fallback readiness — ${label}`,'# Verify the current XML files exist at their configured paths.\n# Confirm the XML deployment and rollback order.');
+   }
    if(files.length){
     add(deploy,a,n,i,`Check ${a.name} process on ${n.host||'the node'}`,a.process||`ps -ef | grep -F -- ${shellQuote(where)} | grep -v grep`);
     const force=String(a.stop||'').includes('kill -9');
-    add(deploy,a,n,i,`Stop ${a.name} — ${n.host||`Node ${i+1}`}`,`${force?'# Identify and confirm the exact PID before terminating the process\n':''}cd ${shellQuote(where)}\n${a.stop||'# STOP COMMAND NOT CONFIGURED'}`,force?'kill -9 is forceful; validate the PID and use approved procedures.':'');
-    add(deploy,a,n,i,`Deploy JAR/WAR file(s) to ${n.host||'the node'}`,`# Transfer approved release file(s) to ${folder}\ncd ${shellQuote(folder)}\n${files.map(o=>`chmod 755 -- ${shellQuote(o.name||'<release file>')}`).join('\n')}`);
+    add(deploy,a,n,i,`Stop ${a.name} — ${n.host||`Node ${i+1}`}`,`${force?'# Confirm the exact process ID first.\n':''}cd ${shellQuote(where)}\n${a.stop||'# STOP COMMAND NOT CONFIGURED'}`,force?'Kill -9 is forceful. Use only an approved, verified PID.':'');
+    add(deploy,a,n,i,`Back up JAR/WAR after stopping ${a.name}`,validFolder(folder)?`cd ${shellQuote(folder)}\n${typedFileCommands(files,name=>`mv ${shellQuote(name)} ${shellQuote(`backup/${name}.${date}`)}`)}`:'# REVIEW: Deployment path not configured. Do not run file commands.');
+    add(deploy,a,n,i,`Release JAR/WAR file(s) to ${docFolder(folder)}`,`# Transfer approved ${files.map(x=>docFile(x.name)).join(', ')} to the destination\n${validFolder(folder)?`cd ${shellQuote(folder)}\n${typedFileCommands(files,name=>`chmod 755 ${shellQuote(name)}`)}`:'# REVIEW: Deployment path not configured.'}`);
    }
-   for(const o of xmls){
-    const destination=String(o.path||'').trim()||xmlPath;
-    add(deploy,a,n,i,`${o.change==='new'?'Release NEW':'Replace EXISTING'} XML ${o.name||'[XML file]'} — ${n.host||`Node ${i+1}`}`,
-     `# Transfer the approved ${o.name||'[XML file]'} to the destination\ncd ${shellQuote(destination)}\n# ${o.change==='new'?'Copy new XML file to this path (no prior file backup required)':'Replace the existing XML with the approved new version after the backup'}\n# Verify filename, content, permissions and ownership.`,
-     o.change==='new'?'This is a new XML file; no XML pre-deployment backup step is generated.':'Existing XML is backed up during pre-deployment.');
+   for(const group of groups){
+    if(group.existing.length){
+     add(deploy,a,n,i,`Back up existing ${group.label} XML on ${n.host||'the node'}`,validFolder(group.path)?`cd ${shellQuote(group.path)}\n${typedFileCommands(group.existing,name=>`mv ${shellQuote(name)} ${shellQuote(`${name}.${date}`)}`)}`:'# REVIEW: XML destination path not configured.');
+    }
+    add(deploy,a,n,i,`Release ${group.label} XML file(s) to ${docFolder(group.path)}`,`# Transfer the approved XML file(s)\n${validFolder(group.path)?`cd ${shellQuote(group.path)}`:'# REVIEW: XML destination path not configured.'}\nFile Name:\n${group.files.map(o=>`- ${docFile(o.name)}`).join('\n')}`);
    }
    if(files.length){
     add(deploy,a,n,i,`Start ${a.name} — ${n.host||`Node ${i+1}`}`,`cd ${shellQuote(where)}\n${a.start||'# START COMMAND NOT CONFIGURED'}`);
-    add(deploy,a,n,i,`Verify ${a.name} node ${i+1} before continuing`,`# Recheck process status\n${a.process||`ps -ef | grep -F -- ${shellQuote(where)} | grep -v grep`}\n# Check logs, service readiness and post-deployment validation`,'Proceed to the next node ONLY after this node passes verification. Confirm LB drain/restore if required.');
+    add(deploy,a,n,i,`Verify ${a.name} node ${i+1} before continuing`,`# Recheck process status\n${a.process||`ps -ef | grep -F -- ${shellQuote(where)} | grep -v grep`}\n# Confirm logs, connectivity and application readiness`, 'Proceed to the next node ONLY after verification succeeds.');
    }else{
-    add(deploy,a,n,i,`Verify XML changes on ${n.host||`Node ${i+1}`}`,'# Validate XML content, syntax, access and application behavior.\n# Restart/reload only if required by approved application procedure.','XML-only releases do not automatically stop or start the application.');
+    add(deploy,a,n,i,`Verify XML changes on ${n.host||`Node ${i+1}`}`,'# Verify XML syntax, file permissions and application behavior.\n# Restart/reload only if the approved procedure requires it.');
    }
-   if(files.length)add(rollback,a,n,i,`Stop ${a.name} on ${n.host||`Node ${i+1}`}`,`cd ${shellQuote(where)}\n${a.stop||'# STOP COMMAND NOT CONFIGURED'}`);
-   if(files.length)add(rollback,a,n,i,'Restore backed-up JAR/WAR file(s)',`cd ${shellQuote(folder)}\n${files.map(o=>`cp -p -- ${shellQuote(`backup/${o.name}.${date}`)} ${shellQuote(o.name)}\nchmod 755 -- ${shellQuote(o.name)}`).join('\n')}`);
-   for(const o of xmls){
-    if(o.change==='existing')add(rollback,a,n,i,`Restore previous XML: ${o.name||'[XML file]'}`,`cd ${shellQuote(String(o.path||'').trim()||xmlPath)}\ncp -p -- ${shellQuote(`backup/${o.name}.${date}`)} ${shellQuote(o.name)}`);
-    else add(rollback,a,n,i,`Remove newly released XML (after approval): ${o.name||'[XML file]'}`,`cd ${shellQuote(String(o.path||'').trim()||xmlPath)}\n# Verify exact new file and dependencies; remove ONLY after authorization.\n# Candidate file: ${shellQuote(o.name||'[XML file]')}`,'New XML has no previous version to restore.');
+   if(files.length)add(rollback,a,n,i,`Stop ${a.name} before fallback on ${n.host||`Node ${i+1}`}`,`cd ${shellQuote(where)}\n${a.stop||'# STOP COMMAND NOT CONFIGURED'}`);
+   if(files.length)add(rollback,a,n,i,`Restore backed-up JAR/WAR file(s)`,validFolder(folder)?`cd ${shellQuote(folder)}\n${typedFileCommands(files,name=>`rm -rf ${shellQuote(name)}\nmv ${shellQuote(`backup/${name}.${date}`)} ${shellQuote(name)}`)}`:'# REVIEW: Deployment path not configured.');
+   for(const group of groups){
+    if(group.existing.length)add(rollback,a,n,i,`Restore existing ${group.label} XML`,validFolder(group.path)?`cd ${shellQuote(group.path)}\n${typedFileCommands(group.existing,name=>`rm -rf ${shellQuote(name)}`)}\n${typedFileCommands(group.existing,name=>`mv ${shellQuote(`${name}.${date}`)} ${shellQuote(name)}`)}`:'# REVIEW: XML destination path not configured.');
+    if(group.newFiles.length)add(rollback,a,n,i,`Remove new ${group.label} XML after confirmation`,`# Confirm these files can be safely removed.\n${validFolder(group.path)?`cd ${shellQuote(group.path)}\n${typedFileCommands(group.newFiles,name=>`rm -rf ${shellQuote(name)}`)}`:'# REVIEW: XML destination path not configured.'}`);
    }
-   if(files.length)add(rollback,a,n,i,`Start and verify ${a.name} on ${n.host||`Node ${i+1}`}`,`cd ${shellQuote(where)}\n${a.start||'# START COMMAND NOT CONFIGURED'}\n# Validate service and application health`);
-   else if(xmls.length)add(rollback,a,n,i,`Verify XML fallback on ${n.host||`Node ${i+1}`}`,'# Verify XML state, application behavior, and service readiness.');
+   if(files.length)add(rollback,a,n,i,`Restart and verify ${a.name} after fallback on ${n.host||`Node ${i+1}`}`,`cd ${shellQuote(where)}\n${a.start||'# START COMMAND NOT CONFIGURED'}`);
   });
  });
- // SQL execution is always first. SQL fallback is deliberately listed AFTER application rollback.
- // Actual DB/app rollback order depends on dependencies and requires an approved plan.
- if(d.sqlInvolved==='Yes')for(const f of [...effectiveSqlFiles()].reverse()){
-  addSql(rollback,`Execute fallback SQL: ${f.fallbackName}`,
-   `# Run approved fallback SQL script: ${f.fallbackName}\n# Verify that the affected data has been restored.`,
-   'Confirm the appropriate database and application rollback sequence before execution.');
- }
- post.push({app:'All affected components',node:'Overall',host:'',ip:'',title:'Overall post-deployment validation and verification',commands:(d.validation||'Validate every affected application and database change, connectivity and transactions.')+(d.sqlInvolved==='Yes'?'\n# Validate SQL data/results against expected outcomes.':''),note:'Perform final end-to-end verification across all components, then obtain functional confirmation and record actual completion time.',stage:'Post'});
- post.push({app:'Change closure',node:'Overall',host:'',ip:'',title:'Confirm final deployment status',commands:'# Record outcome, issues, approvals, actual times and any follow-up actions',note:'Mark completed only after overall verification.',stage:'Post'});
- const steps=[...pre,...deploy,...post];
- const start=new Date(`${d.startDate||'invalid'}T${d.startTime||'invalid'}:00`);
- const end=new Date(`${d.endDate||'invalid'}T${d.endTime||'invalid'}:00`);
- if(Number.isFinite(start.getTime())&&Number.isFinite(end.getTime())&&end>=start){
-  steps.forEach((step,i)=>{
-   const at=new Date(start.getTime()+Math.round(((end-start)*(steps.length===1?1:i/(steps.length-1)))/60000)*60000);
-   const v=x=>String(x).padStart(2,'0');
-   step.expectedAt=`${v(at.getDate())}/${v(at.getMonth()+1)}/${at.getFullYear()} ${v(at.getHours())}:${v(at.getMinutes())}`;
-  });
- }
+ if(d.sqlInvolved==='Yes')effectiveSqlFiles().forEach(f=>addSql(rollback,`Execute fallback SQL: ${f.fallbackName}`,`# Execute approved fallback SQL: ${f.fallbackName}\n# Verify restored data.`, 'Confirm the approved SQL/application rollback sequence.'));
+ post.push({app:'All affected components',node:'Overall',host:'',ip:'',title:'Overall post-deployment validation and verification',commands:textOnly(d.validation)||'Verify and validate all affected applications.',note:'Do not close the change until verification is complete.',stage:'Post'});
+ rollback.push({app:'Services',node:'Overall',host:'',ip:'',title:'Overall verification after fallback',commands:'# View application logs and confirm service connectivity.\n# Validate business functions after the rollback.',stage:'Rollback'});
+ const schedule=[...pre,...deploy,...post],start=new Date(`${d.startDate||'invalid'}T${d.startTime||'invalid'}:00`),end=new Date(`${d.endDate||'invalid'}T${d.endTime||'invalid'}:00`);
+ if(Number.isFinite(start.getTime())&&Number.isFinite(end.getTime())&&end>=start) schedule.forEach((step,i)=>{const at=new Date(start.getTime()+Math.round(((end-start)*(schedule.length===1?1:i/(schedule.length-1)))/60000)*60000);const pad=x=>String(x).padStart(2,'0');step.expectedAt=`${pad(at.getDate())}/${pad(at.getMonth()+1)}/${at.getFullYear()} ${pad(at.getHours())}:${pad(at.getMinutes())}`});
  return {pre,deploy,post,rollback,objects};
 }
 function renderReview(){refreshDocumentChoices();const w=warningList();$('#reviewWarnings').innerHTML=w.length?`<div class="notice"><strong>${w.length} review item(s):</strong><ul>${w.map(x=>`<li>${escapeHtml(x)}</li>`).join('')}</ul>Documents may still be generated as drafts, but correct the missing items before approval.</div>`:`<div class="notice success">✓ No missing required deployment fields were detected. Review generated commands against your actual server environment.</div>`;const p=buildPlan();$('#metrics').innerHTML=[['Applications',selected().length],['Server nodes',selected().reduce((s,a)=>s+a.nodes.length,0)],['Deployment files',p.objects.length],['Planned duration',duration()||'—'],['Downtime',state.draft.downtime==='Yes'?downtimeDuration():'0 hours']].map(([k,v])=>`<div class="metric"><span>${k}</span><b>${escapeHtml(v)}</b></div>`).join('');renderPlanPreview();}
@@ -282,32 +274,78 @@ function allLocal(el,name){return [...el.getElementsByTagName('*')].filter(e=>e.
 function direct(el,name){return [...el.childNodes].filter(e=>e.nodeType===1&&e.localName===name)}
 function writeText(node,val,ns){const parts=String(val??'').split('\n');node.textContent=parts[0];let cur=node;for(let i=1;i<parts.length;i++){const br=node.ownerDocument.createElementNS(ns,'w:br');cur.parentNode.insertBefore(br,cur.nextSibling);const t=node.ownerDocument.createElementNS(ns,'w:t');t.setAttribute('xml:space','preserve');t.textContent=parts[i];br.parentNode.insertBefore(t,br.nextSibling);cur=t;}}
 function setWordCell(tc,val){const texts=allLocal(tc,'t');if(texts.length){writeText(texts[0],val,WORD_NS);texts.slice(1).forEach(e=>e.textContent='');return;}let p=direct(tc,'p')[0];if(!p){p=tc.ownerDocument.createElementNS(WORD_NS,'w:p');tc.appendChild(p)}let r=tc.ownerDocument.createElementNS(WORD_NS,'w:r'),t=tc.ownerDocument.createElementNS(WORD_NS,'w:t');r.appendChild(t);p.appendChild(r);writeText(t,val,WORD_NS)}
-function tableRowExpand(doc,marker,rows){const trs=allLocal(doc,'tr'),tr=trs.find(r=>allLocal(r,'t').some(t=>t.textContent.includes(marker)));if(!tr)throw Error('Document template missing row marker '+marker);const parent=tr.parentNode;for(const values of rows){const clone=tr.cloneNode(true),cells=direct(clone,'tc');values.forEach((v,i)=>{if(cells[i])setWordCell(cells[i],v)});if((values[0]==='' && /^(Backup Procedures|Rollback Procedures|SQL\/DATABASE|POST-DEPLOYMENT|[A-Z][A-Z0-9 &()/-]+ — )/.test(values[1]||'')) || /^(PRE-DEPLOYMENT ACTIVITIES|DEPLOYMENT ACTIVITIES|POST-DEPLOYMENT ACTIVITIES)$/.test(values[0]||'')){for(const tc of cells){const pr=direct(tc,'tcPr')[0]||tc.ownerDocument.createElementNS(WORD_NS,'w:tcPr');if(!pr.parentNode)tc.insertBefore(pr,tc.firstChild);let sh=direct(pr,'shd')[0];if(!sh){sh=tc.ownerDocument.createElementNS(WORD_NS,'w:shd');pr.appendChild(sh)}sh.setAttributeNS(WORD_NS,'w:fill',values[0]===''?'D9D9D9':'DEE8EE');for(const r of allLocal(tc,'r')){let rp=direct(r,'rPr')[0];if(!rp){rp=tc.ownerDocument.createElementNS(WORD_NS,'w:rPr');r.insertBefore(rp,r.firstChild)}if(!direct(rp,'b').length)rp.appendChild(tc.ownerDocument.createElementNS(WORD_NS,'w:b'));}}}parent.insertBefore(clone,tr)}parent.removeChild(tr);}
+function tableRowExpand(doc,marker,rows){const trs=allLocal(doc,'tr'),tr=trs.find(r=>allLocal(r,'t').some(t=>t.textContent.includes(marker)));if(!tr)throw Error('Document template missing row marker '+marker);const parent=tr.parentNode;for(const values of rows){const clone=tr.cloneNode(true),cells=direct(clone,'tc');values.forEach((v,i)=>{if(cells[i])setWordCell(cells[i],v)});if((values[0]==='' && /^(Backup Procedures|Rollback Procedures|SQL\/DATABASE|POST-DEPLOYMENT|[A-Z][A-Z0-9 &()/-]+ — )/.test(values[1]||'')) || /^(PRE-DEPLOYMENT ACTIVITIES|DEPLOYMENT ACTIVITIES|POST-DEPLOYMENT ACTIVITIES)$/.test(values[0]||'')){for(const tc of cells){const pr=direct(tc,'tcPr')[0]||tc.ownerDocument.createElementNS(WORD_NS,'w:tcPr');if(!pr.parentNode)tc.insertBefore(pr,tc.firstChild);let sh=direct(pr,'shd')[0];if(!sh){sh=tc.ownerDocument.createElementNS(WORD_NS,'w:shd');pr.appendChild(sh)}sh.setAttributeNS(WORD_NS,'w:fill',values[0]===''?'D9D9D9':'DEE8EE');for(const r of allLocal(tc,'r')){let rp=direct(r,'rPr')[0];if(!rp){rp=tc.ownerDocument.createElementNS(WORD_NS,'w:rPr');r.insertBefore(rp,r.firstChild)}if(!direct(rp,'b').length)rp.appendChild(tc.ownerDocument.createElementNS(WORD_NS,'w:b'));}}}if(marker==='[[BACKUP_ROW]]'||marker==='[[RELEASE_STEP_ROW]]'){
+const heading=values[0]===''&&/^(Backup Procedures|Rollback Procedures|SQL\\/DATABASE|POST-DEPLOYMENT|[A-Z][A-Z0-9 &()_/-]+ — )/.test(values[1]||'');
+for(const tc of cells){
+let pr=direct(tc,'tcPr')[0];if(!pr){pr=tc.ownerDocument.createElementNS(WORD_NS,'w:tcPr');tc.insertBefore(pr,tc.firstChild)}
+let shade=direct(pr,'shd')[0];if(!shade){shade=tc.ownerDocument.createElementNS(WORD_NS,'w:shd');pr.appendChild(shade)}
+shade.setAttributeNS(WORD_NS,'w:fill',heading?'D9D9D9':'FFFFFF');
+if(!heading)for(const run of allLocal(tc,'r')){const rp=direct(run,'rPr')[0];if(rp)direct(rp,'b').forEach(n=>rp.removeChild(n))}
+}}
+parent.insertBefore(clone,tr)}parent.removeChild(tr);}
 function replaceWordTokens(doc,map){const re=/\{\{([A-Z0-9_]+)\}\}/g;const texts=allLocal(doc,'t');texts.forEach(t=>{const orig=t.textContent||'';if(!orig.includes('{{'))return;const next=orig.replace(re,(m,key)=>Object.hasOwn(map,key)?safeText(map[key]):m);if(next!==orig)writeText(t,next,WORD_NS)});}
 function stepsToWord(items){return items.map(s=>{const detail=`${s.title}${s.commands?'\n'+s.commands:''}`;return [detail,s.host?`${s.app} / ${s.node} / ${s.host}`:`${s.app} / ${s.node}`,s.expectedAt||'']})}
 function stagedWordRows(plan){const rows=[];for(const [title,items] of [['PRE-DEPLOYMENT ACTIVITIES',plan.pre],['DEPLOYMENT ACTIVITIES',plan.deploy],['POST-DEPLOYMENT ACTIVITIES',plan.post]]){rows.push([title,'','']);rows.push(...stepsToWord(items));}return rows;}
+// Release-note format is built as adjacent, separately numbered backup/rollback groups.
 function releaseBackupRows(plan){
- const rows=[];
- for(const [kind,items] of [['Backup',plan.pre],['Rollback',plan.rollback]]){
-  let group='';let count=0;
-  for(const x of items){
-   const label=x.app==='SQL/Database'?'SQL/Database':`${x.app} — ${x.host||x.node}`;
-   if(group!==label){group=label;count=0;rows.push(['',`${kind} Procedures (${label})`]);}
-   // The reference gives each command its own numbered table row.
-   rows.push([`${++count}.`,x.title]);
-   for(const line of (x.commands||'').split('\n'))if(line.trim())rows.push(['',line]);
-  }
+ const rows=[],date=stamp(),d=state.draft;
+ function section(kind,label,commands){rows.push(['',`${kind} Procedures (${label})`]);let count=0;for(const c of commands)rows.push([`${++count}.`,c]);}
+ if(d.sqlInvolved==='Yes'){section('Backup','SQL/Database',['Back up current affected data in the database.','Prepare and verify the fallback SQL script(s).']);section('Rollback','SQL/Database',effectiveSqlFiles().map(f=>`Execute approved fallback SQL: ${f.fallbackName}`));}
+ for(const a of selected()){
+  const files=binaryArtifacts(a),xmls=xmlArtifacts(a);
+  a.nodes.forEach((n,i)=>{
+   const label=a.nodes.length===1?a.name:`${a.name} — ${n.host||`Node ${i+1}`}`;
+   if(files.length){
+    const path=docFolder(n.filePath);
+    section('Backup',label,[`# cd ${path}`,...files.map(o=>validFileName(o.name)?`# mv ${o.name} backup/${o.name}.${date}`:'# REVIEW: missing or invalid JAR/WAR filename')]);
+    section('Rollback',label,[`# cd ${path}`,...files.map(o=>validFileName(o.name)?`# rm -rf ${o.name}`:'# REVIEW: missing or invalid JAR/WAR filename'),...files.map(o=>validFileName(o.name)?`# mv backup/${o.name}.${date} ${o.name}`:'# REVIEW: missing or invalid JAR/WAR filename')]);
+   }
+   for(const group of xmlGroups(a,n,xmls)){
+    const labelXml=group.label==='xml'?'xml':group.label;
+    const suffix=a.nodes.length>1?` — ${n.host||`Node ${i+1}`}`:'';
+    if(group.existing.length){
+     section('Backup',labelXml+suffix,[`# cd ${docFolder(group.path)}`,...group.existing.map(o=>validFileName(o.name)?`# mv ${o.name} ${o.name}.${date}`:'# REVIEW: missing or invalid XML filename')]);
+     section('Rollback',labelXml+suffix,[`# cd ${docFolder(group.path)}`,...group.existing.map(o=>validFileName(o.name)?`# rm -rf ${o.name}`:'# REVIEW: missing or invalid XML filename'),...group.existing.map(o=>validFileName(o.name)?`# mv ${o.name}.${date} ${o.name}`:'# REVIEW: missing or invalid XML filename')]);
+    }
+    if(group.newFiles.length)section('Rollback',`New ${labelXml==='xml'?'XML':labelXml} XML${suffix}`,[`# cd ${docFolder(group.path)}`,...group.newFiles.map(o=>validFileName(o.name)?`# After approval: rm -rf ${o.name}`:'# REVIEW: missing or invalid XML filename')]);
+   }
+  });
  }
  return rows.length?rows:[['','Not applicable']];
 }
 function releaseProcedureRows(plan){
- const rows=[];let group='';let count=0;
- for(const x of [...plan.deploy,...plan.post]){
-  const label=x.app==='SQL/Database'?'SQL/DATABASE':x.node==='Overall'?'POST-DEPLOYMENT / OVERALL VERIFICATION':`${x.app.toUpperCase()} — ${x.host||x.node}`;
-  if(group!==label){group=label;count=0;rows.push(['',label]);}
-  rows.push([`${++count}.`,x.title]);
-  for(const line of (x.commands||'').split('\n'))if(line.trim())rows.push(['',line]);
+ const rows=[],d=state.draft;
+ function section(label){rows.push(['',label]);}
+ function step(state,body){rows.push([`${++state.count}.`,body]);}
+ if(d.sqlInvolved==='Yes'){const seq={count:0};section('SQL/DATABASE');effectiveSqlFiles().forEach(f=>step(seq,`Execute SQL before all other component deployments\n${f.name}\nVerify successful execution. Stop deployment if SQL execution fails.`));}
+ for(const a of selected()){
+  const files=binaryArtifacts(a),xmls=xmlArtifacts(a);
+  a.nodes.forEach((n,i)=>{
+   if(!files.length&&!xmls.length)return;
+   const groupLabel=a.nodes.length===1?a.name:`${a.name} — ${n.host||`Node ${i+1}`} (${n.ip||'IP not set'})`;
+   const backupLabel=a.nodes.length===1?a.name:`${a.name} — ${n.host||`Node ${i+1}`}`;
+   const seq={count:0};section(groupLabel.toUpperCase());
+   if(files.length){
+    step(seq,`Check the status of the process\n${a.process||'# Process-check command not configured'}\n\nStop the ${a.name}\ncd ${docFolder(n.appPath)}\n${a.stop||'# STOP COMMAND NOT CONFIGURED'}`);
+    step(seq,`Do the backup as following above Backup Procedures (${backupLabel})\nFor Rollback, please follow Rollback Procedures (${backupLabel})`);
+    step(seq,`Release the file(s) to\ncd ${docFolder(n.filePath)}\n\nChange the permission of the file(s)\n${files.map(o=>validFileName(o.name)?`chmod 755 ${o.name}`:'# REVIEW: Missing or invalid JAR/WAR filename').join('\n')}`);
+   }
+   for(const group of xmlGroups(a,n,xmls)){
+    const suffix=a.nodes.length>1?` — ${n.host||`Node ${i+1}`}`:'';
+    const label=(group.label==='xml'?'xml':group.label)+suffix;
+    section(`${group.label.toUpperCase()} — ${n.host||`Node ${i+1}`}`);
+    if(group.existing.length)step(seq,`Do the backup as following above Backup Procedures (${label})\nFor Rollback, please follow Rollback Procedures (${label})`);
+    step(seq,`Release the file(s) to\ncd ${docFolder(group.path)}\n\nFile Name:\n${group.files.map(o=>`- ${docFile(o.name)}`).join('\n')}`);
+   }
+   if(files.length){
+    step(seq,`Start the ${a.name}\ncd ${docFolder(n.appPath)}\n${a.start||'# START COMMAND NOT CONFIGURED'}`);
+    step(seq,`Verify the ${a.name} application on ${n.host||`Node ${i+1}`}\n${a.process||'# Verify service/process and application health'}\nProceed to the next node ONLY after verification succeeds.`);
+   }else step(seq,`Verify XML changes on ${n.host||`Node ${i+1}`}\nConfirm the new XML files and configuration are valid.`);
+   rows.push(['',`For rollback procedure. Please follow above step 1 to ${seq.count}.`]);
+  });
  }
+ section('POST-DEPLOYMENT / OVERALL VERIFICATION');
+ const seq={count:0};for(const x of plan.post)step(seq,`${x.title}${x.commands?'\n'+x.commands:''}`);
  return rows.length?rows:[['','No deployment steps selected']];
 }
 const SIGNATURE_NS={
@@ -386,8 +424,8 @@ async function wordExport(kind){
   tableRowExpand(doc,'[[RELEASE_STEP_ROW]]',releaseProcedureRows(data._plan));
  }else{
   tableRowExpand(doc,'[[PROGRAM_ROW]]',data._plan.objects.map(o=>[`${o.application}: ${o.name}`,o.version||'',o.checksum||'']));
-  tableRowExpand(doc,'[[BACKUP_ROW]]',[...data._plan.pre,...data._plan.rollback].map(s=>[`${s.app} / ${s.host||s.node}`,`${s.title}\n${s.commands}`]));
-  tableRowExpand(doc,'[[RELEASE_STEP_ROW]]',[...data._plan.deploy,...data._plan.post].map(s=>[`${s.app} / ${s.host||s.node}`,`${s.title}\n${s.commands}`]));
+  tableRowExpand(doc,'[[BACKUP_ROW]]',releaseBackupRows(data._plan));
+  tableRowExpand(doc,'[[RELEASE_STEP_ROW]]',releaseProcedureRows(data._plan));
  }
  replaceWordTokens(doc,data);
  await applySignature(doc,zip,kind==='itcr'?'itcr':'release',kind==='itcr'?'{{ITCR_REQUESTOR_SIGNATURE}}':'{{RELEASE_PREPARED_SIGNATURE}}');
